@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style>
+
+        .menu li {
+            display: inline-block; /* Пункты меню по горизонтали */
+        }
+
+
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.9.0/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.9.0/addons/p5.dom.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.1.4/lib/p5.min.js"></script>
+</head>
+
+
+
+
+<body>
+<ul class="menu">
+
+    <li><a id="Columns">{{ .Columns}}</a></li>
+    <li><a>X</a></li>
+    <li><a id="Rows">{{ .Columns}}</a></li>
+</ul>
+
+<script type="text/javascript">
+
+    let socket = new WebSocket("ws://127.0.0.1:4000/astar");
+    console.log("Attempting Connection...");
+
+    socket.onopen = () => {
+        console.log("Successfully Connected");
+
+    };
+
+    // function send(){
+    //     socket.send(document.getElementById('UserName').innerHTML + document.getElementById('inp_1').value)
+    // }
+
+    socket.onclose = event => {
+        console.log("Socket Closed Connection: ", event);
+
+    };
+
+    socket.onerror = error => {
+        console.log("Socket Error: ", error);
+    };
+
+    var columns = 1
+    var rows = 1
+
+    var path = []
+    var open = []
+    var close = []
+    var del = 0
+
+    var wall = []
+
+    var traffic = []
+
+    function Spot(i,j,g){
+        this.i = i;
+        this.j = j;
+        this.g = g;
+        this.show = function(col){
+            fill(col)
+            //noStroke()
+            //console.log(this.i, this.j)
+            rect(this.i * w, this.j * h, w, h)
+        }
+    }
+
+    socket.onmessage = event => {
+        
+        str = event.data
+        if(str[0] == 'c'){ //rows and columns
+            
+            split1 = str.split('col')
+
+            split2 = split1[1].split(' ')
+            columns = split2[0]
+            rows = split2[1]
+        }
+
+        if(str[0] == 'p'){ // path
+            
+            split1 = str.split('p')
+
+            split2 = split1[1].split(' ')
+
+            path.push(new Spot(split2[0], split2[1]))
+        }
+
+        if(str[0] == 'j'){ //to delete data from slices
+            
+            del = 1
+        }
+
+
+        if(str[0] == 'o'){ //openSet
+            
+            split1 = str.split('o')
+
+            split2 = split1[1].split(' ')
+
+            open.push(new Spot(split2[0], split2[1]))
+        }
+
+        if(str[0] == 'e'){ //closeSet
+            
+            split1 = str.split('e')
+
+            split2 = split1[1].split(' ')
+
+            close.push(new Spot(split2[0], split2[1]))
+        }
+
+
+
+        if(str[0] == 'w'){ //walls
+            
+            split1 = str.split('w')
+
+            split2 = split1[1].split(' ')
+
+            wall.push(new Spot(split2[0], split2[1]))
+        }
+
+
+        
+        if(str[0] == 't'){ //walls
+            
+            split1 = str.split('t')
+
+            split2 = split1[1].split(' ')
+
+            traffic.push(new Spot(split2[0], split2[1], split2[2]))
+        }
+
+
+    };
+
+
+    var w,h
+    var c
+
+    var k = 0
+
+    var st
+
+    var stay = []
+
+
+    function findArray(arr, elem){
+        for (var i = arr.length - 1; i >= 0;i--){
+            if(arr[i].i == elem.i && arr[i].j == elem.j){
+                return i;
+            }
+        }
+        return - 1
+    }
+
+
+    function setup(){
+
+        createCanvas(600,600);
+        w= width/columns;
+        h = height/ rows;
+
+
+
+    }
+
+
+
+    function mouseClicked(){
+        //if (mouseIsPressed == true) {
+            if (mouseX <= width && mouseY <= height && mouseY >=0 && mouseY >=0){
+                if (mouseButton == LEFT) {
+                    i = Math.floor(mouseX / w)
+                    j = Math.floor(mouseY / h)
+                    st = new Spot(i,j)
+                    is = findArray(stay, st)
+                    last = findArray(wall, st)
+                    if (is > -1 || last > -1){
+                        console.log("jopa")
+                        if(is > -1){
+                            stay.splice(is, 1);
+                        }
+                        if (last > -1){
+                            wall.splice(last, 1);
+                        }
+                        st.show(color(255,255,255))
+                        //socket send about deleting
+                        socket.send("d" + i.toString() + " " + j.toString())
+                    }else {
+                        stay.push(st)
+                        st.show(color(0,0,0))
+                        socket.send("c" + i.toString() + " " + j.toString())
+                    }
+                    
+
+                    
+                }
+            }
+        //}
+    }
+
+    function draw() {
+
+       
+        if (columns != 1){
+            if (k == 0){
+                background(0);
+                setup()
+                k = 1
+                
+
+
+                for(var i = 0; i < columns; i++){
+                    for(var j = 0; j < rows;j++){
+                        rect(i * w, j * h, w, h)
+                    }
+                }
+
+
+
+
+                for(var i = 0; i < traffic.length; i++){
+                    if (traffic[i].g == 0){
+                        traffic[i].show(color(255,255,255))
+                    }
+                    if (traffic[i].g == 1){
+                        traffic[i].show(color(255,255,0))
+                    }
+                    if (traffic[i].g == 2){
+                        traffic[i].show(color(253,106,2))
+                    }
+                    
+                }
+
+                for ( var i = 0; i < wall.length; i++){
+                    wall[i].show(color(0,0,0));
+                }
+
+            }
+
+        
+            for ( var i = 0; i < open.length; i++){
+                open[i].show(color(0,255,0));
+            }
+
+            for ( var i = 0; i < close.length; i++){
+                close[i].show(color(255,0,0));
+            }
+
+
+            
+            for ( var i = 0; i < path.length; i++){
+                path[i].show(color(0,0,255));
+            }
+
+            if (del == 1){
+                path = []
+                open = []
+                close = []
+                del = 0
+            }
+        }
+
+
+    }
+</script>
+
+</body>
+</html>
